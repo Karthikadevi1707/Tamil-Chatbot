@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+<meta charset="UTF-8">
+<title>தமிழ் இலக்கிய Chatbot</title>
+
+<style>
+body{
+  margin:0;
+  font-family: "Segoe UI", sans-serif;
+  background: linear-gradient(135deg,#667eea,#764ba2);
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.card{
+  background:#ffffff;
+  width:800px;
+  max-width:95%;
+  border-radius:16px;
+  padding:25px;
+  box-shadow:0 15px 40px rgba(0,0,0,0.2);
+}
+
+h2{
+  text-align:center;
+  color:#4a148c;
+  margin-bottom:20px;
+}
+
+input, select{
+  width:100%;
+  padding:12px;
+  margin-bottom:12px;
+  border-radius:8px;
+  border:1px solid #ccc;
+  font-size:16px;
+}
+
+button{
+  width:100%;
+  padding:12px;
+  background: linear-gradient(90deg,#ff512f,#dd2476);
+  color:white;
+  font-size:17px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+}
+
+button:hover{
+  opacity:0.9;
+}
+
+#answer{
+  margin-top:20px;
+  padding:15px;
+  background:#f3f0ff;
+  border-left:6px solid #7c4dff;
+  border-radius:8px;
+  white-space:pre-wrap;
+  color:#2c2c2c;
+}
+
+.footer{
+  text-align:center;
+  margin-top:15px;
+  font-size:13px;
+  color:#777;
+}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+  <h2>📚 தமிழ் இலக்கிய Chatbot</h2>
+
+  <input id="q" placeholder="உங்கள் கேள்வியை இங்கே எழுதுங்கள்...">
+
+  <select id="mode">
+    <option value="short">🔹 Short</option>
+    <option value="medium" selected>🔹 Medium</option>
+    <option value="explain">🔹 Explain</option>
+  </select>
+
+  <button onclick="ask()">✨ பதில் பெற</button>
+
+  <div id="answer">💬 பதில் இங்கே காணப்படும்...</div>
+
+  <div class="footer">Powered by Tamil Literature AI</div>
+</div>
+
+<script>
+function ask(){
+  const q = document.getElementById("q").value.trim();
+  const mode = document.getElementById("mode").value;
+
+  if(!q){
+    document.getElementById("answer").innerText = "⚠️ கேள்வி எழுதுங்கள்";
+    return;
+  }
+
+  document.getElementById("answer").innerText = "⏳ பதில் தயாராகிறது...";
+
+  fetch("http://127.0.0.1:8000/ask",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ question:q, mode:mode })
+  })
+  .then(res => res.json())
+  .then(data => {
+    document.getElementById("answer").innerText =
+      data.answer || data.error || "பதில் கிடைக்கவில்லை";
+  })
+  .catch(()=>{
+    document.getElementById("answer").innerText =
+      "❌ Server connect ஆகவில்லை";
+  });
+}
+</script>
+
+</body>
+</html>
