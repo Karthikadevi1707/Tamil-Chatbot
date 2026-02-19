@@ -1,103 +1,176 @@
 <!DOCTYPE html>
-<html>
+<html lang="ta">
 <head>
-<title>Tamil Literature Chatbot</title>
+<meta charset="UTF-8">
+<title>AI PDF Assistant</title>
 
 <style>
-
-body {
-    margin: 0;
-    font-family: Arial;
-    display: flex;
+body{
+    margin:0;
+    font-family:Arial;
+    background:linear-gradient(135deg,#141e30,#243b55);
+    display:flex;
+    flex-direction:column;
+    height:100vh;
 }
 
-#sidebar {
-    width: 250px;
-    background: #111;
-    color: white;
-    height: 100vh;
-    padding: 10px;
+#chatArea{
+    flex:1;
+    padding:20px;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
 }
 
-#newchat {
-    background: green;
-    padding: 10px;
-    cursor: pointer;
-    margin-bottom: 10px;
+.message{
+    max-width:80%;
+    padding:12px;
+    margin:10px 0;
+    border-radius:12px;
 }
 
-.chatItem {
-    padding: 8px;
-    cursor: pointer;
-    border-bottom: 1px solid #333;
+.user{
+    background:white;
+    align-self:flex-end;
 }
 
-.chatItem:hover {
-    background: #222;
+.bot{
+    background:#e3f2fd;
+    align-self:flex-start;
 }
 
-#main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
+.input-area{
+    display:flex;
+    padding:10px;
+    background:white;
 }
 
-#chatbox {
-    flex: 1;
-    padding: 10px;
-    overflow-y: auto;
+input[type="text"]{
+    flex:1;
+    padding:10px;
+    font-size:16px;
 }
 
-#inputArea {
-    display: flex;
-    padding: 10px;
-    background: #eee;
+button{
+    padding:8px 12px;
+    margin-left:5px;
+    cursor:pointer;
 }
 
-#message {
-    flex: 1;
-    padding: 10px;
+.upload-area{
+    padding:10px;
+    background:white;
+    display:flex;
+    gap:10px;
 }
-
-button {
-    padding: 10px;
-}
-
 </style>
-
 </head>
 
 <body>
 
-<!-- Sidebar -->
-<div id="sidebar">
-
-    <div id="newchat" onclick="newChat()">
-        + New Chat
-    </div>
-
-    <div id="chatList"></div>
-
+<div class="upload-area">
+    <input type="file" id="pdfFile">
+    <button onclick="uploadPDF()">📄 Upload PDF</button>
 </div>
 
-<!-- Main -->
-<div id="main">
+<div id="chatArea"></div>
 
-    <!-- Chat messages -->
-    <div id="chatbox"></div>
-
-    <!-- Input -->
-    <div id="inputArea">
-
-        <input id="message" placeholder="Type message...">
-
-        <button onclick="sendMessage()">Send</button>
-
-    </div>
-
+<div class="input-area">
+    <input type="text" id="userInput" placeholder="Question number or type your question">
+    <button onclick="sendMessage()">Send</button>
+    <button onclick="startVoice()" id="micBtn">🎤</button>
 </div>
 
-<script src="script.js"></script>
+<script>
+
+async function uploadPDF(){
+
+    const file = document.getElementById("pdfFile").files[0];
+    if(!file){
+        alert("Select PDF file");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch("http://127.0.0.1:8000/upload-pdf",{
+        method:"POST",
+        body:formData
+    });
+
+    const data = await res.json();
+
+    const chatArea = document.getElementById("chatArea");
+
+    if(data.error){
+        chatArea.innerHTML += `<div class="message bot">${data.error}</div>`;
+    }else{
+        chatArea.innerHTML += `<div class="message bot">✅ PDF Uploaded<br>Total Questions: ${data.total_questions}</div>`;
+    }
+
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+async function sendMessage(){
+
+    const input = document.getElementById("userInput");
+    const message = input.value.trim();
+    if(!message) return;
+
+    const chatArea = document.getElementById("chatArea");
+
+    chatArea.innerHTML += `<div class="message user">${message}</div>`;
+    input.value="";
+
+    const res = await fetch("http://127.0.0.1:8000/ask",{
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({ question: message })
+    });
+
+    const data = await res.json();
+    const reply = data.answer || data.error || "No response";
+
+    chatArea.innerHTML += `<div class="message bot">${reply}</div>`;
+
+    speakText(reply);
+
+    chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function speakText(text){
+    const speech = new SpeechSynthesisUtterance(text);
+    speech.lang="ta-IN";
+    speech.rate=1;
+    speechSynthesis.speak(speech);
+}
+
+function startVoice(){
+
+    if(!('webkitSpeechRecognition' in window)){
+        alert("Use Chrome Browser");
+        return;
+    }
+
+    const recognition = new webkitSpeechRecognition();
+    recognition.lang="ta-IN";
+    recognition.start();
+
+    document.getElementById("micBtn").innerText="🎙️ Listening...";
+
+    recognition.onresult=function(event){
+        const transcript = event.results[0][0].transcript;
+        document.getElementById("userInput").value = transcript;
+        sendMessage();
+    };
+
+    recognition.onend=function(){
+        document.getElementById("micBtn").innerText="🎤";
+    };
+}
+
+</script>
 
 </body>
 </html>
