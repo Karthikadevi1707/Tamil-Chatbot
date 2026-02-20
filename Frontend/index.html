@@ -2,173 +2,188 @@
 <html lang="ta">
 <head>
 <meta charset="UTF-8">
-<title>AI PDF Assistant</title>
+<title>தமிழ் இலக்கிய AI</title>
 
 <style>
-body{
-    margin:0;
-    font-family:Arial;
-    background:linear-gradient(135deg,#141e30,#243b55);
-    display:flex;
-    flex-direction:column;
-    height:100vh;
-}
-
-#chatArea{
-    flex:1;
-    padding:20px;
-    overflow-y:auto;
-    display:flex;
-    flex-direction:column;
-}
-
-.message{
-    max-width:80%;
-    padding:12px;
-    margin:10px 0;
-    border-radius:12px;
-}
-
-.user{
-    background:white;
-    align-self:flex-end;
-}
-
-.bot{
-    background:#e3f2fd;
-    align-self:flex-start;
-}
-
-.input-area{
-    display:flex;
-    padding:10px;
-    background:white;
-}
-
-input[type="text"]{
-    flex:1;
-    padding:10px;
-    font-size:16px;
-}
-
-button{
-    padding:8px 12px;
-    margin-left:5px;
-    cursor:pointer;
-}
-
-.upload-area{
-    padding:10px;
-    background:white;
-    display:flex;
-    gap:10px;
-}
+body{margin:0;font-family:'Segoe UI',sans-serif;display:flex;height:100vh;}
+.sidebar{width:260px;background:#202123;color:white;padding:15px;display:flex;flex-direction:column;}
+.sidebar button{padding:10px;margin-bottom:15px;background:#10a37f;border:none;border-radius:6px;color:white;cursor:pointer;}
+.chat-list{flex:1;overflow-y:auto;}
+.chat-item{padding:8px;margin-bottom:5px;background:#343541;border-radius:6px;cursor:pointer;font-size:14px;}
+.chat-item:hover{background:#444654;}
+.main{flex:1;display:flex;flex-direction:column;background:#f4f6f9;}
+.chat-area{flex:1;padding:20px;overflow-y:auto;}
+.message{margin-bottom:15px;max-width:75%;padding:15px;border-radius:12px;line-height:1.6;font-size:15px;}
+.user{background:#0084ff;color:white;margin-left:auto;}
+.bot{background:linear-gradient(135deg,#ffffff,#e6f0ff);border-left:5px solid #10a37f;}
+.input-area{display:flex;align-items:center;padding:15px;border-top:1px solid #ccc;background:white;}
+input[type="text"]{flex:1;padding:12px;border-radius:20px;border:1px solid #ccc;}
+button{margin-left:5px;padding:8px 12px;border:none;border-radius:20px;background:#0084ff;color:white;cursor:pointer;}
+.mic{background:#ff4b5c;border-radius:50%;}
+.toggle{background:#555;}
 </style>
 </head>
 
 <body>
 
-<div class="upload-area">
-    <input type="file" id="pdfFile">
-    <button onclick="uploadPDF()">📄 Upload PDF</button>
+<div class="sidebar">
+    <button onclick="newChat()">🆕 புதிய உரையாடல்</button>
+    <div class="chat-list" id="chatList"></div>
 </div>
 
-<div id="chatArea"></div>
+<div class="main">
+    <div class="chat-area" id="chatArea"></div>
 
-<div class="input-area">
-    <input type="text" id="userInput" placeholder="Question number or type your question">
-    <button onclick="sendMessage()">Send</button>
-    <button onclick="startVoice()" id="micBtn">🎤</button>
+    <div class="input-area">
+        <input type="file" id="imageInput" accept="image/*">
+        <input type="text" id="question" placeholder="உங்கள் கேள்வியை எழுதுங்கள்...">
+        <button class="toggle" id="voiceToggle" onclick="toggleVoice()">🔇 Voice OFF</button>
+        <button class="mic" onclick="startVoice()">🎤</button>
+        <button onclick="sendImage()">📷</button>
+        <button onclick="sendMessage()">அனுப்பு</button>
+    </div>
 </div>
 
 <script>
 
-async function uploadPDF(){
+let chats = JSON.parse(localStorage.getItem("tamilChats")) || {};
+let currentChatId = null;
+let voiceEnabled = false;
 
-    const file = document.getElementById("pdfFile").files[0];
-    if(!file){
-        alert("Select PDF file");
-        return;
-    }
+function saveChats(){
+    localStorage.setItem("tamilChats", JSON.stringify(chats));
+}
 
-    const formData = new FormData();
-    formData.append("file", file);
+function newChat(){
+    currentChatId = "chat_" + Date.now();
+    chats[currentChatId] = [];
+    saveChats();
+    renderChatList();
+    renderMessages();
+}
 
-    const res = await fetch("http://127.0.0.1:8000/upload-pdf",{
+function renderChatList(){
+    const chatList = document.getElementById("chatList");
+    chatList.innerHTML="";
+    Object.keys(chats).forEach(id=>{
+        const item=document.createElement("div");
+        item.className="chat-item";
+        item.innerText=chats[id][0]?.text||"புதிய உரையாடல்";
+        item.onclick=()=>{currentChatId=id;renderMessages();};
+        chatList.appendChild(item);
+    });
+}
+
+function renderMessages(){
+    const chatArea=document.getElementById("chatArea");
+    chatArea.innerHTML="";
+    if(!currentChatId) return;
+
+    chats[currentChatId].forEach(msg=>{
+        const div=document.createElement("div");
+        div.className="message "+msg.type;
+
+        if(msg.type==="bot"){
+            div.innerHTML = msg.text.replace(/\n/g,"<br>") +
+            `<br><button onclick="manualSpeak(this)">🔊 கேள்</button>`;
+
+            // 🔥 Auto speak only if ON and only for latest message
+            if(voiceEnabled && msg === chats[currentChatId][chats[currentChatId].length-1]){
+                speakText(msg.text);
+            }
+
+        } else {
+            div.innerHTML = msg.text.replace(/\n/g,"<br>");
+        }
+
+        chatArea.appendChild(div);
+    });
+
+    chatArea.scrollTop=chatArea.scrollHeight;
+}
+
+async function sendMessage(){
+    const input=document.getElementById("question");
+    const question=input.value.trim();
+    if(!question) return;
+    if(!currentChatId) newChat();
+
+    chats[currentChatId].push({type:"user",text:question});
+    renderMessages(); saveChats(); input.value="";
+
+    const response=await fetch("http://127.0.0.1:9000/ask",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({question})
+    });
+
+    const data=await response.json();
+    chats[currentChatId].push({type:"bot",text:data.answer});
+    renderMessages(); saveChats();
+}
+
+async function sendImage(){
+    const file=document.getElementById("imageInput").files[0];
+    if(!file){alert("Image தேர்வு செய்யவும்");return;}
+    if(!currentChatId) newChat();
+
+    const formData=new FormData();
+    formData.append("file",file);
+
+    chats[currentChatId].push({type:"user",text:"📷 Image Question"});
+    renderMessages(); saveChats();
+
+    const response=await fetch("http://127.0.0.1:9000/image-question",{
         method:"POST",
         body:formData
     });
 
-    const data = await res.json();
-
-    const chatArea = document.getElementById("chatArea");
-
-    if(data.error){
-        chatArea.innerHTML += `<div class="message bot">${data.error}</div>`;
-    }else{
-        chatArea.innerHTML += `<div class="message bot">✅ PDF Uploaded<br>Total Questions: ${data.total_questions}</div>`;
-    }
-
-    chatArea.scrollTop = chatArea.scrollHeight;
-}
-
-async function sendMessage(){
-
-    const input = document.getElementById("userInput");
-    const message = input.value.trim();
-    if(!message) return;
-
-    const chatArea = document.getElementById("chatArea");
-
-    chatArea.innerHTML += `<div class="message user">${message}</div>`;
-    input.value="";
-
-    const res = await fetch("http://127.0.0.1:8000/ask",{
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body:JSON.stringify({ question: message })
-    });
-
-    const data = await res.json();
-    const reply = data.answer || data.error || "No response";
-
-    chatArea.innerHTML += `<div class="message bot">${reply}</div>`;
-
-    speakText(reply);
-
-    chatArea.scrollTop = chatArea.scrollHeight;
-}
-
-function speakText(text){
-    const speech = new SpeechSynthesisUtterance(text);
-    speech.lang="ta-IN";
-    speech.rate=1;
-    speechSynthesis.speak(speech);
+    const data=await response.json();
+    chats[currentChatId].push({type:"bot",text:data.answer});
+    renderMessages(); saveChats();
 }
 
 function startVoice(){
-
-    if(!('webkitSpeechRecognition' in window)){
-        alert("Use Chrome Browser");
-        return;
-    }
-
-    const recognition = new webkitSpeechRecognition();
+    if(!('webkitSpeechRecognition'in window)){alert("Voice support இல்லை");return;}
+    const recognition=new webkitSpeechRecognition();
     recognition.lang="ta-IN";
     recognition.start();
-
-    document.getElementById("micBtn").innerText="🎙️ Listening...";
-
     recognition.onresult=function(event){
-        const transcript = event.results[0][0].transcript;
-        document.getElementById("userInput").value = transcript;
-        sendMessage();
-    };
-
-    recognition.onend=function(){
-        document.getElementById("micBtn").innerText="🎤";
+        document.getElementById("question").value=
+        event.results[0][0].transcript;
     };
 }
+
+function speakText(text){
+    window.speechSynthesis.cancel(); // 🔥 stop previous speech
+
+    if(!voiceEnabled) return;
+
+    const speech=new SpeechSynthesisUtterance(text);
+    speech.lang="ta-IN";
+    window.speechSynthesis.speak(speech);
+}
+
+function manualSpeak(btn){
+    const text = btn.parentElement.innerText.replace("🔊 கேள்","");
+    window.speechSynthesis.cancel();
+    const speech=new SpeechSynthesisUtterance(text);
+    speech.lang="ta-IN";
+    window.speechSynthesis.speak(speech);
+}
+
+function toggleVoice(){
+    voiceEnabled=!voiceEnabled;
+    const btn=document.getElementById("voiceToggle");
+
+    if(!voiceEnabled){
+        window.speechSynthesis.cancel(); // 🔥 immediately stop when OFF
+    }
+
+    btn.innerText=voiceEnabled?"🔊 Voice ON":"🔇 Voice OFF";
+}
+
+renderChatList();
 
 </script>
 
