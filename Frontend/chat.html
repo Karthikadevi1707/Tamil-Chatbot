@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+<meta charset="UTF-8">
+<title>தமிழ் AI Assistant</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="sidebar">
+<h3>History</h3>
+<div id="history"></div>
+<button onclick="logout()">Logout</button>
+</div>
+
+<div class="main">
+
+<div class="chat-area" id="chatArea"></div>
+
+<div class="input-area">
+<label class="file-label">
+📎
+<input type="file" hidden onchange="handleFile(event)">
+</label>
+
+<input type="text" id="userInput" placeholder="உங்கள் கேள்வி...">
+
+<button onclick="startVoice()">🎤</button>
+<button onclick="sendMessage()">Send</button>
+</div>
+
+</div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

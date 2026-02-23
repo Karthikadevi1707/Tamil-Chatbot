@@ -4,15 +4,18 @@
 <meta charset="UTF-8">
 <title>தமிழ் AI Assistant</title>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
 <style>
 body{
     margin:0;
     font-family:'Segoe UI',sans-serif;
     display:flex;
     height:100vh;
+    background:linear-gradient(135deg,#dfe9f3,#ffffff);
 }
 
-/* SIDEBAR */
+/* Sidebar */
 .sidebar{
     width:260px;
     background:#202123;
@@ -21,17 +24,25 @@ body{
     display:flex;
     flex-direction:column;
 }
+
 .sidebar button{
     padding:10px;
-    margin-bottom:10px;
+    margin-bottom:8px;
     border:none;
     border-radius:6px;
     cursor:pointer;
 }
+
 .new-btn{background:#10a37f;color:white;}
 .clear-btn{background:#ff4b5c;color:white;}
+.export-btn{background:#0084ff;color:white;}
 
-.chat-list{flex:1;overflow-y:auto;}
+.chat-list{
+    flex:1;
+    overflow-y:auto;
+    margin-top:10px;
+}
+
 .chat-item{
     padding:8px;
     margin-bottom:5px;
@@ -42,7 +53,7 @@ body{
     align-items:center;
     font-size:14px;
 }
-.chat-item span{flex:1;cursor:pointer;}
+
 .delete-btn{
     background:red;
     border:none;
@@ -52,50 +63,73 @@ body{
     cursor:pointer;
 }
 
-/* MAIN */
-.main{
-    flex:1;
-    display:flex;
-    flex-direction:column;
-    background:#f4f6f9;
-}
-.chat-area{
-    flex:1;
-    padding:20px;
-    overflow-y:auto;
-}
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;}
+.chat-area{flex:1;padding:20px;overflow-y:auto;}
+
 .message{
     margin-bottom:15px;
     max-width:75%;
-    padding:15px;
-    border-radius:12px;
-    line-height:1.6;
-    word-wrap:break-word;
+    padding:18px;
+    border-radius:15px;
+    line-height:1.7;
+    animation:fadeIn 0.4s ease-in-out;
+    white-space:pre-line;
 }
+
 .user{
     background:#0084ff;
     color:white;
     margin-left:auto;
 }
+
 .bot{
-    background:linear-gradient(135deg,#ffffff,#e6f0ff);
-    border-left:5px solid #10a37f;
+    background:#ffffff;
+    border-left:6px solid #10a37f;
 }
 
-/* INPUT AREA */
+.copy-btn{
+    margin-top:8px;
+    font-size:12px;
+    background:#10a37f;
+    color:white;
+    border:none;
+    padding:5px 10px;
+    border-radius:5px;
+    cursor:pointer;
+}
+
+.typing-indicator{
+    font-style:italic;
+    color:#10a37f;
+    animation:blink 1s infinite;
+}
+
+@keyframes blink{
+    0%{opacity:0.3;}
+    50%{opacity:1;}
+    100%{opacity:0.3;}
+}
+
+@keyframes fadeIn{
+    from{opacity:0;transform:translateY(10px);}
+    to{opacity:1;transform:translateY(0);}
+}
+
 .input-area{
     display:flex;
     align-items:center;
     padding:10px;
     border-top:1px solid #ccc;
-    background:white;
 }
+
 input[type="text"]{
     flex:1;
     padding:10px;
     border-radius:20px;
     border:1px solid #ccc;
 }
+
 button{
     margin-left:5px;
     padding:8px 12px;
@@ -105,16 +139,17 @@ button{
     color:white;
     cursor:pointer;
 }
-.mic{background:#ff4b5c;}
-.toggle{background:#555;}
 </style>
 </head>
 
 <body>
 
 <div class="sidebar">
-    <button class="new-btn" onclick="newChat()">🆕 புதிய உரையாடல்</button>
-    <button class="clear-btn" onclick="clearAllChats()">🗑 அனைத்தும் Delete</button>
+    <button class="new-btn" onclick="newChat()">🆕 New Chat</button>
+    <button class="export-btn" onclick="exportTXT()">⬇ Export TXT</button>
+    <button class="export-btn" onclick="exportPDF()">📄 Export PDF</button>
+    <button class="clear-btn" onclick="clearAllChats()">🗑 Clear</button>
+    <p id="chatCount"></p>
     <div class="chat-list" id="chatList"></div>
 </div>
 
@@ -123,101 +158,78 @@ button{
 
     <div class="input-area">
         <input type="file" id="fileInput">
-        <input type="text" id="question" placeholder="உங்கள் கேள்வியை எழுதுங்கள்...">
-
-        <button class="toggle" id="voiceToggle" onclick="toggleVoice()">🔇 Voice OFF</button>
-        <button class="mic" onclick="startVoice()">🎤</button>
-
-        <button onclick="sendMessage()">அனுப்பு</button>
-        <button onclick="sendImageQuestion()">📷</button>
+        <input type="text" id="question" placeholder="உங்கள் கேள்வி...">
+        <button onclick="startVoice()">🎤</button>
+        <button onclick="sendMessage()">Send</button>
+        <button onclick="sendImage()">📷</button>
         <button onclick="sendPDF()">📄</button>
-        <button onclick="generateImage()">🎨</button>
     </div>
 </div>
 
 <script>
 
 let chats = JSON.parse(localStorage.getItem("tamilChats")) || {};
-let currentChatId = null;
-let voiceEnabled = false;
+let currentChatId=null;
 
-/* SAVE */
 function saveChats(){
-    localStorage.setItem("tamilChats", JSON.stringify(chats));
+    localStorage.setItem("tamilChats",JSON.stringify(chats));
+    renderChatList();
 }
 
-/* NEW CHAT */
 function newChat(){
-    currentChatId = "chat_" + Date.now();
-    chats[currentChatId] = [];
+    currentChatId="chat_"+Date.now();
+    chats[currentChatId]=[];
     saveChats();
-    renderChatList();
     renderMessages();
 }
 
-/* DELETE SINGLE */
-function deleteChat(id){
-    if(confirm("இந்த உரையாடலை delete செய்யவா?")){
-        delete chats[id];
-        if(currentChatId===id) currentChatId=null;
-        saveChats();
-        renderChatList();
-        renderMessages();
-    }
-}
-
-/* CLEAR ALL */
 function clearAllChats(){
-    if(confirm("அனைத்து history-யும் delete செய்யவா?")){
-        chats={};
-        currentChatId=null;
-        saveChats();
-        renderChatList();
-        renderMessages();
-    }
+    chats={};
+    currentChatId=null;
+    saveChats();
+    renderMessages();
 }
 
-/* SIDEBAR RENDER */
 function renderChatList(){
     const list=document.getElementById("chatList");
     list.innerHTML="";
     Object.keys(chats).forEach(id=>{
+        let title=chats[id][0]?.text||"New Chat";
+        title=title.substring(0,25)+"...";
         const div=document.createElement("div");
         div.className="chat-item";
-
-        const span=document.createElement("span");
-        span.innerText=chats[id][0]?.text||"புதிய உரையாடல்";
-        span.onclick=()=>{currentChatId=id;renderMessages();};
-
-        const del=document.createElement("button");
-        del.className="delete-btn";
-        del.innerText="❌";
-        del.onclick=()=>deleteChat(id);
-
-        div.appendChild(span);
-        div.appendChild(del);
+        div.innerHTML=`<span onclick="loadChat('${id}')">${title}</span>
+        <button class="delete-btn" onclick="deleteChat('${id}')">❌</button>`;
         list.appendChild(div);
     });
+    document.getElementById("chatCount").innerText=
+        "Chats: "+Object.keys(chats).length;
 }
 
-/* MESSAGE RENDER */
+function loadChat(id){ currentChatId=id; renderMessages(); }
+function deleteChat(id){ delete chats[id]; saveChats(); renderMessages(); }
+
 function renderMessages(){
     const area=document.getElementById("chatArea");
     area.innerHTML="";
     if(!currentChatId) return;
 
-    chats[currentChatId].forEach((msg,index)=>{
+    chats[currentChatId].forEach(msg=>{
         const div=document.createElement("div");
         div.className="message "+msg.type;
+        div.innerHTML=msg.text;
 
         if(msg.type==="bot"){
-            div.innerHTML=msg.text.replace(/\n/g,"<br>")+
-            `<br><button onclick="manualSpeak(this)">🔊 கேள்</button>`;
-            if(voiceEnabled && index===chats[currentChatId].length-1){
-                speakText(msg.text);
-            }
-        }else{
-            div.innerHTML=msg.text.replace(/\n/g,"<br>");
+            const btn=document.createElement("button");
+            btn.innerText="📋 Copy";
+            btn.className="copy-btn";
+            btn.onclick=function(){
+                navigator.clipboard.writeText(div.innerText.trim());
+                btn.innerText="Copied!";
+                setTimeout(()=>btn.innerText="📋 Copy",1500);
+            };
+            div.appendChild(document.createElement("br"));
+            div.appendChild(btn);
         }
 
         area.appendChild(div);
@@ -226,147 +238,171 @@ function renderMessages(){
     area.scrollTop=area.scrollHeight;
 }
 
-/* TEXT QUESTION */
-async function sendMessage(){
-    const input=document.getElementById("question");
-    const question=input.value.trim();
-    if(!question) return;
-
-    if(!currentChatId) newChat();
-
-    chats[currentChatId].push({type:"user",text:question});
-    renderMessages(); saveChats();
-    input.value="";
-
-    const res=await fetch("http://127.0.0.1:9000/ask",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({question})
-    });
-
-    const data=await res.json();
-    chats[currentChatId].push({type:"bot",text:data.answer});
-    renderMessages(); saveChats();
+function formatAnswer(text){
+    let sentences=text.split(". ");
+    if(sentences.length<=2) return text;
+    let paragraph=sentences.slice(0,2).join(". ") + ".\n\n";
+    let points=sentences.slice(2).map(s=>"• "+s.trim()).join("\n");
+    return paragraph+points;
 }
 
-/* IMAGE QUESTION */
-async function sendImageQuestion(){
+/* TEXT */
+async function sendMessage(){
+    const q=document.getElementById("question").value.trim();
+    if(!q) return;
+    if(!currentChatId) newChat();
+
+    chats[currentChatId].push({type:"user",text:q});
+    renderMessages();
+    saveChats();
+    document.getElementById("question").value="";
+
+    const area=document.getElementById("chatArea");
+
+    const typing=document.createElement("div");
+    typing.className="typing-indicator";
+    typing.innerText="AI is typing...";
+    area.appendChild(typing);
+
+    try{
+        const res=await fetch("http://127.0.0.1:9000/ask",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({question:q})
+        });
+
+        const data=await res.json();
+        typing.remove();
+        await typeBotMessage(formatAnswer(data.answer));
+
+    }catch{
+        typing.remove();
+        chats[currentChatId].push({type:"bot",text:"Server error"});
+        renderMessages();
+        saveChats();
+    }
+}
+
+/* IMAGE */
+async function sendImage(){
     const file=document.getElementById("fileInput").files[0];
-    if(!file){alert("Image தேர்வு செய்யவும்");return;}
+    if(!file) return alert("Select Image File");
 
     if(!currentChatId) newChat();
+
+    chats[currentChatId].push({type:"user",text:"📷 Uploaded Image: "+file.name});
+    renderMessages();
+    saveChats();
 
     const formData=new FormData();
     formData.append("file",file);
 
-    chats[currentChatId].push({type:"user",text:"📷 Image Upload"});
-    renderMessages(); saveChats();
+    try{
+        const res=await fetch("http://127.0.0.1:9000/image-question",{
+            method:"POST",
+            body:formData
+        });
+        const data=await res.json();
+        await typeBotMessage(formatAnswer(data.answer));
+    }catch{
+        chats[currentChatId].push({type:"bot",text:"Image processing error"});
+        renderMessages();
+        saveChats();
+    }
 
-    const res=await fetch("http://127.0.0.1:9000/image-question",{
-        method:"POST",
-        body:formData
-    });
-
-    const data=await res.json();
-    chats[currentChatId].push({type:"bot",text:data.answer});
-    renderMessages(); saveChats();
+    document.getElementById("fileInput").value="";
 }
 
 /* PDF */
 async function sendPDF(){
     const file=document.getElementById("fileInput").files[0];
-    if(!file){alert("PDF தேர்வு செய்யவும்");return;}
+    if(!file) return alert("Select PDF File");
 
     if(!currentChatId) newChat();
+
+    chats[currentChatId].push({type:"user",text:"📄 Uploaded PDF: "+file.name});
+    renderMessages();
+    saveChats();
 
     const formData=new FormData();
     formData.append("file",file);
 
-    chats[currentChatId].push({type:"user",text:"📄 PDF Upload"});
-    renderMessages(); saveChats();
-
-    const res=await fetch("http://127.0.0.1:9000/pdf-question",{
-        method:"POST",
-        body:formData
-    });
-
-    const data=await res.json();
-    chats[currentChatId].push({type:"bot",text:data.answer});
-    renderMessages(); saveChats();
-}
-
-/* IMAGE GENERATE */
-async function generateImage(){
-    const input=document.getElementById("question");
-    const prompt=input.value.trim();
-    if(!prompt) return;
-
-    if(!currentChatId) newChat();
-
-    chats[currentChatId].push({type:"user",text:"🎨 "+prompt});
-    renderMessages(); saveChats();
-    input.value="";
-
-    const res=await fetch("http://127.0.0.1:9000/generate-image",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({prompt})
-    });
-
-    const data=await res.json();
-
-    if(data.image_url){
-        chats[currentChatId].push({
-            type:"bot",
-            text:`<img src="${data.image_url}" width="350">`
+    try{
+        const res=await fetch("http://127.0.0.1:9000/pdf-question",{
+            method:"POST",
+            body:formData
         });
-    }else{
-        chats[currentChatId].push({
-            type:"bot",
-            text:"Image உருவாக்க முடியவில்லை."
-        });
+        const data=await res.json();
+        await typeBotMessage(formatAnswer(data.answer));
+    }catch{
+        chats[currentChatId].push({type:"bot",text:"PDF processing error"});
+        renderMessages();
+        saveChats();
     }
 
-    renderMessages(); saveChats();
+    document.getElementById("fileInput").value="";
 }
 
-/* VOICE INPUT */
+/* Typing Animation */
+async function typeBotMessage(text){
+    const area=document.getElementById("chatArea");
+    const div=document.createElement("div");
+    div.className="message bot";
+    area.appendChild(div);
+
+    let i=0;
+    function typeChar(){
+        if(i<text.length){
+            div.innerHTML+=text.charAt(i);
+            i++;
+            area.scrollTop=area.scrollHeight;
+            setTimeout(typeChar,15);
+        }else{
+            chats[currentChatId].push({type:"bot",text:text});
+            saveChats();
+            renderMessages();
+        }
+    }
+    typeChar();
+}
+
 function startVoice(){
-    if(!('webkitSpeechRecognition'in window)){
-        alert("Voice support இல்லை");
+    if(!('webkitSpeechRecognition' in window)){
+        alert("Voice not supported");
         return;
     }
-    const rec=new webkitSpeechRecognition();
-    rec.lang="ta-IN";
-    rec.start();
-    rec.onresult=function(e){
+    const recognition=new webkitSpeechRecognition();
+    recognition.lang="ta-IN";
+    recognition.start();
+    recognition.onresult=function(event){
         document.getElementById("question").value=
-        e.results[0][0].transcript;
+            event.results[0][0].transcript;
     };
 }
 
-/* VOICE OUTPUT */
-function speakText(text){
-    window.speechSynthesis.cancel();
-    if(!voiceEnabled) return;
-    const speech=new SpeechSynthesisUtterance(text);
-    speech.lang="ta-IN";
-    window.speechSynthesis.speak(speech);
+function exportTXT(){
+    if(!currentChatId) return;
+    let text="";
+    chats[currentChatId].forEach(msg=>{
+        text+=(msg.type==="user"?"User: ":"AI: ")+msg.text+"\n\n";
+    });
+    const blob=new Blob([text],{type:"text/plain"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="chat.txt";
+    a.click();
 }
 
-function manualSpeak(btn){
-    const text=btn.parentElement.innerText.replace("🔊 கேள்","");
-    window.speechSynthesis.cancel();
-    const speech=new SpeechSynthesisUtterance(text);
-    speech.lang="ta-IN";
-    window.speechSynthesis.speak(speech);
-}
-
-function toggleVoice(){
-    voiceEnabled=!voiceEnabled;
-    const btn=document.getElementById("voiceToggle");
-    if(!voiceEnabled) window.speechSynthesis.cancel();
-    btn.innerText=voiceEnabled?"🔊 Voice ON":"🔇 Voice OFF";
+async function exportPDF(){
+    if(!currentChatId) return;
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF();
+    let y=10;
+    chats[currentChatId].forEach(msg=>{
+        doc.text((msg.type==="user"?"User: ":"AI: ")+msg.text,10,y);
+        y+=10;
+    });
+    doc.save("chat.pdf");
 }
 
 renderChatList();
