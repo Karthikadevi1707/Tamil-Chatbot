@@ -6,9 +6,9 @@ import io
 import uvicorn
 from PyPDF2 import PdfReader
 from groq import Groq
+import os
 
-# 🔐 PUT YOUR GROQ API KEY
-GROQ_API_KEY = "REMOVED_GROQ_KEY"
+groq_api_key = os.getenv("GROQ_API_KEY")
 
 TEXT_MODEL = "meta-llama/llama-4-maverick-17b-128e-instruct"
 VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
