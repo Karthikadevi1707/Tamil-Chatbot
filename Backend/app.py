@@ -23,7 +23,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = Groq(api_key=GROQ_API_KEY)
+client = Groq(api_key=groq_api_key)
 
 class Question(BaseModel):
     question: str
