@@ -2,175 +2,411 @@
 <html lang="ta">
 <head>
 <meta charset="UTF-8">
-<title>AI PDF Assistant</title>
+<title>தமிழ் AI Assistant</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
 body{
     margin:0;
-    font-family:Arial;
-    background:linear-gradient(135deg,#141e30,#243b55);
+    font-family:'Segoe UI',sans-serif;
     display:flex;
-    flex-direction:column;
     height:100vh;
+    background:linear-gradient(135deg,#dfe9f3,#ffffff);
 }
 
-#chatArea{
-    flex:1;
-    padding:20px;
-    overflow-y:auto;
+/* Sidebar */
+.sidebar{
+    width:260px;
+    background:#202123;
+    color:white;
+    padding:15px;
     display:flex;
     flex-direction:column;
 }
+
+.sidebar button{
+    padding:10px;
+    margin-bottom:8px;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+.new-btn{background:#10a37f;color:white;}
+.clear-btn{background:#ff4b5c;color:white;}
+.export-btn{background:#0084ff;color:white;}
+
+.chat-list{
+    flex:1;
+    overflow-y:auto;
+    margin-top:10px;
+}
+
+.chat-item{
+    padding:8px;
+    margin-bottom:5px;
+    background:#343541;
+    border-radius:6px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size:14px;
+}
+
+.delete-btn{
+    background:red;
+    border:none;
+    color:white;
+    padding:3px 6px;
+    border-radius:4px;
+    cursor:pointer;
+}
+
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;}
+.chat-area{flex:1;padding:20px;overflow-y:auto;}
 
 .message{
-    max-width:80%;
-    padding:12px;
-    margin:10px 0;
-    border-radius:12px;
+    margin-bottom:15px;
+    max-width:75%;
+    padding:18px;
+    border-radius:15px;
+    line-height:1.7;
+    animation:fadeIn 0.4s ease-in-out;
+    white-space:pre-line;
 }
 
 .user{
-    background:white;
-    align-self:flex-end;
+    background:#0084ff;
+    color:white;
+    margin-left:auto;
 }
 
 .bot{
-    background:#e3f2fd;
-    align-self:flex-start;
+    background:#ffffff;
+    border-left:6px solid #10a37f;
+}
+
+.copy-btn{
+    margin-top:8px;
+    font-size:12px;
+    background:#10a37f;
+    color:white;
+    border:none;
+    padding:5px 10px;
+    border-radius:5px;
+    cursor:pointer;
+}
+
+.typing-indicator{
+    font-style:italic;
+    color:#10a37f;
+    animation:blink 1s infinite;
+}
+
+@keyframes blink{
+    0%{opacity:0.3;}
+    50%{opacity:1;}
+    100%{opacity:0.3;}
+}
+
+@keyframes fadeIn{
+    from{opacity:0;transform:translateY(10px);}
+    to{opacity:1;transform:translateY(0);}
 }
 
 .input-area{
     display:flex;
+    align-items:center;
     padding:10px;
-    background:white;
+    border-top:1px solid #ccc;
 }
 
 input[type="text"]{
     flex:1;
     padding:10px;
-    font-size:16px;
+    border-radius:20px;
+    border:1px solid #ccc;
 }
 
 button{
-    padding:8px 12px;
     margin-left:5px;
+    padding:8px 12px;
+    border:none;
+    border-radius:20px;
+    background:#0084ff;
+    color:white;
     cursor:pointer;
-}
-
-.upload-area{
-    padding:10px;
-    background:white;
-    display:flex;
-    gap:10px;
 }
 </style>
 </head>
 
 <body>
 
-<div class="upload-area">
-    <input type="file" id="pdfFile">
-    <button onclick="uploadPDF()">📄 Upload PDF</button>
+<div class="sidebar">
+    <button class="new-btn" onclick="newChat()">🆕 New Chat</button>
+    <button class="export-btn" onclick="exportTXT()">⬇ Export TXT</button>
+    <button class="export-btn" onclick="exportPDF()">📄 Export PDF</button>
+    <button class="clear-btn" onclick="clearAllChats()">🗑 Clear</button>
+    <p id="chatCount"></p>
+    <div class="chat-list" id="chatList"></div>
 </div>
 
-<div id="chatArea"></div>
+<div class="main">
+    <div class="chat-area" id="chatArea"></div>
 
-<div class="input-area">
-    <input type="text" id="userInput" placeholder="Question number or type your question">
-    <button onclick="sendMessage()">Send</button>
-    <button onclick="startVoice()" id="micBtn">🎤</button>
+    <div class="input-area">
+        <input type="file" id="fileInput">
+        <input type="text" id="question" placeholder="உங்கள் கேள்வி...">
+        <button onclick="startVoice()">🎤</button>
+        <button onclick="sendMessage()">Send</button>
+        <button onclick="sendImage()">📷</button>
+        <button onclick="sendPDF()">📄</button>
+    </div>
 </div>
 
 <script>
 
-async function uploadPDF(){
+let chats = JSON.parse(localStorage.getItem("tamilChats")) || {};
+let currentChatId=null;
 
-    const file = document.getElementById("pdfFile").files[0];
-    if(!file){
-        alert("Select PDF file");
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const res = await fetch("http://127.0.0.1:8000/upload-pdf",{
-        method:"POST",
-        body:formData
-    });
-
-    const data = await res.json();
-
-    const chatArea = document.getElementById("chatArea");
-
-    if(data.error){
-        chatArea.innerHTML += `<div class="message bot">${data.error}</div>`;
-    }else{
-        chatArea.innerHTML += `<div class="message bot">✅ PDF Uploaded<br>Total Questions: ${data.total_questions}</div>`;
-    }
-
-    chatArea.scrollTop = chatArea.scrollHeight;
+function saveChats(){
+    localStorage.setItem("tamilChats",JSON.stringify(chats));
+    renderChatList();
 }
 
+function newChat(){
+    currentChatId="chat_"+Date.now();
+    chats[currentChatId]=[];
+    saveChats();
+    renderMessages();
+}
+
+function clearAllChats(){
+    chats={};
+    currentChatId=null;
+    saveChats();
+    renderMessages();
+}
+
+function renderChatList(){
+    const list=document.getElementById("chatList");
+    list.innerHTML="";
+    Object.keys(chats).forEach(id=>{
+        let title=chats[id][0]?.text||"New Chat";
+        title=title.substring(0,25)+"...";
+        const div=document.createElement("div");
+        div.className="chat-item";
+        div.innerHTML=`<span onclick="loadChat('${id}')">${title}</span>
+        <button class="delete-btn" onclick="deleteChat('${id}')">❌</button>`;
+        list.appendChild(div);
+    });
+    document.getElementById("chatCount").innerText=
+        "Chats: "+Object.keys(chats).length;
+}
+
+function loadChat(id){ currentChatId=id; renderMessages(); }
+function deleteChat(id){ delete chats[id]; saveChats(); renderMessages(); }
+
+function renderMessages(){
+    const area=document.getElementById("chatArea");
+    area.innerHTML="";
+    if(!currentChatId) return;
+
+    chats[currentChatId].forEach(msg=>{
+        const div=document.createElement("div");
+        div.className="message "+msg.type;
+        div.innerHTML=msg.text;
+
+        if(msg.type==="bot"){
+            const btn=document.createElement("button");
+            btn.innerText="📋 Copy";
+            btn.className="copy-btn";
+            btn.onclick=function(){
+                navigator.clipboard.writeText(div.innerText.trim());
+                btn.innerText="Copied!";
+                setTimeout(()=>btn.innerText="📋 Copy",1500);
+            };
+            div.appendChild(document.createElement("br"));
+            div.appendChild(btn);
+        }
+
+        area.appendChild(div);
+    });
+
+    area.scrollTop=area.scrollHeight;
+}
+
+function formatAnswer(text){
+    let sentences=text.split(". ");
+    if(sentences.length<=2) return text;
+    let paragraph=sentences.slice(0,2).join(". ") + ".\n\n";
+    let points=sentences.slice(2).map(s=>"• "+s.trim()).join("\n");
+    return paragraph+points;
+}
+
+/* TEXT */
 async function sendMessage(){
+    const q=document.getElementById("question").value.trim();
+    if(!q) return;
+    if(!currentChatId) newChat();
 
-    const input = document.getElementById("userInput");
-    const message = input.value.trim();
-    if(!message) return;
+    chats[currentChatId].push({type:"user",text:q});
+    renderMessages();
+    saveChats();
+    document.getElementById("question").value="";
 
-    const chatArea = document.getElementById("chatArea");
+    const area=document.getElementById("chatArea");
 
-    chatArea.innerHTML += `<div class="message user">${message}</div>`;
-    input.value="";
+    const typing=document.createElement("div");
+    typing.className="typing-indicator";
+    typing.innerText="AI is typing...";
+    area.appendChild(typing);
 
-    const res = await fetch("http://127.0.0.1:8000/ask",{
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body:JSON.stringify({ question: message })
-    });
+    try{
+        const res=await fetch("http://127.0.0.1:9000/ask",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({question:q})
+        });
 
-    const data = await res.json();
-    const reply = data.answer || data.error || "No response";
+        const data=await res.json();
+        typing.remove();
+        await typeBotMessage(formatAnswer(data.answer));
 
-    chatArea.innerHTML += `<div class="message bot">${reply}</div>`;
-
-    speakText(reply);
-
-    chatArea.scrollTop = chatArea.scrollHeight;
+    }catch{
+        typing.remove();
+        chats[currentChatId].push({type:"bot",text:"Server error"});
+        renderMessages();
+        saveChats();
+    }
 }
 
-function speakText(text){
-    const speech = new SpeechSynthesisUtterance(text);
-    speech.lang="ta-IN";
-    speech.rate=1;
-    speechSynthesis.speak(speech);
+/* IMAGE */
+async function sendImage(){
+    const file=document.getElementById("fileInput").files[0];
+    if(!file) return alert("Select Image File");
+
+    if(!currentChatId) newChat();
+
+    chats[currentChatId].push({type:"user",text:"📷 Uploaded Image: "+file.name});
+    renderMessages();
+    saveChats();
+
+    const formData=new FormData();
+    formData.append("file",file);
+
+    try{
+        const res=await fetch("http://127.0.0.1:9000/image-question",{
+            method:"POST",
+            body:formData
+        });
+        const data=await res.json();
+        await typeBotMessage(formatAnswer(data.answer));
+    }catch{
+        chats[currentChatId].push({type:"bot",text:"Image processing error"});
+        renderMessages();
+        saveChats();
+    }
+
+    document.getElementById("fileInput").value="";
+}
+
+/* PDF */
+async function sendPDF(){
+    const file=document.getElementById("fileInput").files[0];
+    if(!file) return alert("Select PDF File");
+
+    if(!currentChatId) newChat();
+
+    chats[currentChatId].push({type:"user",text:"📄 Uploaded PDF: "+file.name});
+    renderMessages();
+    saveChats();
+
+    const formData=new FormData();
+    formData.append("file",file);
+
+    try{
+        const res=await fetch("http://127.0.0.1:9000/pdf-question",{
+            method:"POST",
+            body:formData
+        });
+        const data=await res.json();
+        await typeBotMessage(formatAnswer(data.answer));
+    }catch{
+        chats[currentChatId].push({type:"bot",text:"PDF processing error"});
+        renderMessages();
+        saveChats();
+    }
+
+    document.getElementById("fileInput").value="";
+}
+
+/* Typing Animation */
+async function typeBotMessage(text){
+    const area=document.getElementById("chatArea");
+    const div=document.createElement("div");
+    div.className="message bot";
+    area.appendChild(div);
+
+    let i=0;
+    function typeChar(){
+        if(i<text.length){
+            div.innerHTML+=text.charAt(i);
+            i++;
+            area.scrollTop=area.scrollHeight;
+            setTimeout(typeChar,15);
+        }else{
+            chats[currentChatId].push({type:"bot",text:text});
+            saveChats();
+            renderMessages();
+        }
+    }
+    typeChar();
 }
 
 function startVoice(){
-
     if(!('webkitSpeechRecognition' in window)){
-        alert("Use Chrome Browser");
+        alert("Voice not supported");
         return;
     }
-
-    const recognition = new webkitSpeechRecognition();
+    const recognition=new webkitSpeechRecognition();
     recognition.lang="ta-IN";
     recognition.start();
-
-    document.getElementById("micBtn").innerText="🎙️ Listening...";
-
     recognition.onresult=function(event){
-        const transcript = event.results[0][0].transcript;
-        document.getElementById("userInput").value = transcript;
-        sendMessage();
-    };
-
-    recognition.onend=function(){
-        document.getElementById("micBtn").innerText="🎤";
+        document.getElementById("question").value=
+            event.results[0][0].transcript;
     };
 }
 
-</script>
+function exportTXT(){
+    if(!currentChatId) return;
+    let text="";
+    chats[currentChatId].forEach(msg=>{
+        text+=(msg.type==="user"?"User: ":"AI: ")+msg.text+"\n\n";
+    });
+    const blob=new Blob([text],{type:"text/plain"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="chat.txt";
+    a.click();
+}
 
+async function exportPDF(){
+    if(!currentChatId) return;
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF();
+    let y=10;
+    chats[currentChatId].forEach(msg=>{
+        doc.text((msg.type==="user"?"User: ":"AI: ")+msg.text,10,y);
+        y+=10;
+    });
+    doc.save("chat.pdf");
+}
+
+renderChatList();
+
+</script>
 </body>
 </html>

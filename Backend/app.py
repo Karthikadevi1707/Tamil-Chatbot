@@ -1,24 +1,17 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from groq import Groq
-import PyPDF2
+import base64
 import io
+import uvicorn
+from PyPDF2 import PdfReader
+from groq import Groq
 import os
-from dotenv import load_dotenv
 
+groq_api_key = os.getenv("GROQ_API_KEY")
 
-load_dotenv()
-
-class Settings:
-    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY")
-    MODEL_NAME: str = os.getenv("MODEL_NAME")
-
-settings = Settings()
-print("Loaded GROQ API KEY:", settings.GROQ_API_KEY)
-
-
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+TEXT_MODEL = "meta-llama/llama-4-maverick-17b-128e-instruct"
+VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 app = FastAPI()
 
@@ -30,109 +23,75 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-stored_questions = []
-stored_pdf_text = ""
+client = Groq(api_key=groq_api_key)
 
-# ---------------- HOME ----------------
-@app.get("/")
-def home():
-    return {"status": "Backend Running"}
-
-# ---------------- PDF UPLOAD ----------------
-@app.post("/upload-pdf")
-async def upload_pdf(file: UploadFile = File(...)):
-    global stored_questions, stored_pdf_text
-
-    contents = await file.read()
-    pdf_reader = PyPDF2.PdfReader(io.BytesIO(contents))
-
-    text = ""
-    for page in pdf_reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text += page_text + "\n"
-
-    if not text.strip():
-        return {"error": "PDF text extract ஆகவில்லை"}
-
-    stored_pdf_text = text
-
-    # AI question detect
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {
-                "role": "system",
-                "content": """
-கீழே உள்ள உரையில் உள்ள அனைத்து கேள்விகளையும் மட்டும் எண் இடி பட்டியலிடவும்.
-தமிழில் மட்டும்.
-"""
-            },
-            {
-                "role": "user",
-                "content": text[:2000]
-            }
-        ],
-        temperature=0.3
-    )
-
-    questions_text = response.choices[0].message.content
-
-    stored_questions = [
-        line.strip()
-        for line in questions_text.split("\n")
-        if line.strip()
-    ]
-
-    return {
-        "message": "PDF uploaded successfully",
-        "total_questions": len(stored_questions)
-    }
-
-# ---------------- ASK ----------------
-class QuestionRequest(BaseModel):
+class Question(BaseModel):
     question: str
 
+# 🔹 TEXT QUESTION
 @app.post("/ask")
-def ask_question(data: QuestionRequest):
-    global stored_questions, stored_pdf_text
-
-    user_input = data.question.strip()
-
-    if not stored_pdf_text:
-        return {"error": "முதலில் PDF upload செய்யவும்"}
-
-    # If number given
-    if user_input.isdigit():
-        q_num = int(user_input)
-
-        if q_num <= 0 or q_num > len(stored_questions):
-            return {"error": "Invalid question number"}
-
-        question_text = stored_questions[q_num - 1]
-    else:
-        question_text = user_input
-
+def ask_question(data: Question):
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=TEXT_MODEL,
+            messages=[
+                {"role": "system", "content": "தமிழில் விரிவாக விளக்கவும்."},
+                {"role": "user", "content": data.question}
+            ],
+        )
+        return {"answer": response.choices[0].message.content}
+    except Exception as e:
+        return {"answer": str(e)}
+
+# 🔹 IMAGE QUESTION
+@app.post("/image-question")
+async def image_question(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        image_base64 = base64.b64encode(contents).decode("utf-8")
+
+        response = client.chat.completions.create(
+            model=VISION_MODEL,
             messages=[
                 {
-                    "role": "system",
-                    "content": """
-நீங்கள் தமிழ் ஆசிரியர்.
-குறுகிய தெளிவான பதில் மட்டும் அளிக்கவும்.
-"""
-                },
-                {
                     "role": "user",
-                    "content": question_text
+                    "content": [
+                        {"type": "text", "text": "இந்த படத்தில் உள்ள கேள்விக்கு தமிழில் முழு பதில் அளிக்கவும்."},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_base64}"
+                            },
+                        },
+                    ],
                 }
             ],
-            temperature=0.5
         )
-
         return {"answer": response.choices[0].message.content}
-
     except Exception as e:
-        return {"error": str(e)}
+        return {"answer": str(e)}
+
+# 🔹 PDF QUESTION
+@app.post("/pdf-question")
+async def pdf_question(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        pdf = PdfReader(io.BytesIO(contents))
+
+        text = ""
+        for page in pdf.pages:
+            text += page.extract_text() or ""
+
+        response = client.chat.completions.create(
+            model=TEXT_MODEL,
+            messages=[
+                {"role": "system", "content": "PDF உள்ளடக்கத்தை தமிழில் விளக்கவும்."},
+                {"role": "user", "content": text[:12000]},
+            ],
+        )
+        return {"answer": response.choices[0].message.content}
+    except Exception as e:
+        return {"answer": str(e)}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=9000)

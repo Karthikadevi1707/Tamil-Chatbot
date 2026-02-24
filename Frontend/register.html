@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+<meta charset="UTF-8">
+<title>Register - Tamil AI</title>
+<style>
+body{
+margin:0;
+height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+font-family:Segoe UI;
+background:#f5f5f5;
+}
+.card{
+width:350px;
+background:white;
+padding:30px;
+border-radius:10px;
+box-shadow:0 10px 25px rgba(0,0,0,0.1);
+}
+input{
+width:100%;
+padding:12px;
+margin-bottom:15px;
+border-radius:8px;
+border:1px solid #ccc;
+}
+button{
+width:100%;
+padding:12px;
+border:none;
+border-radius:8px;
+background:black;
+color:white;
+cursor:pointer;
+}
+.error{color:red;font-size:14px;}
+.link{text-align:center;display:block;margin-top:10px;cursor:pointer;color:blue;}
+</style>
+</head>
+<body>
+
+<div class="card">
+<h2>Register</h2>
+<input type="email" id="email" placeholder="Email">
+<input type="password" id="password" placeholder="Password">
+<input type="password" id="confirm" placeholder="Confirm Password">
+<button onclick="register()">Register</button>
+<div class="error" id="error"></div>
+<span class="link" onclick="location.href='login.html'">Already have account?</span>
+</div>
+
+<script>
+function register(){
+const email=document.getElementById("email").value.trim();
+const pass=document.getElementById("password").value.trim();
+const confirm=document.getElementById("confirm").value.trim();
+
+if(pass!==confirm){
+document.getElementById("error").innerText="Passwords do not match";
+return;
+}
+
+localStorage.setItem("user",JSON.stringify({email:email,password:pass}));
+alert("Registered Successfully!");
+location.href="login.html";
+}
+</script>
+
+</body>
+</html>

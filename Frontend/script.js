@@ -1,132 +1,122 @@
-let currentChatId = null;
-
-const API = "http://127.0.0.1:8000";
-
-
-// Load history on startup
-window.onload = function () {
-    loadHistory();
-};
-
-
-// Create new chat
-function newChat() {
-
-    currentChatId = "chat_" + Date.now();
-
-    document.getElementById("chatbox").innerHTML = "";
-
-    loadHistory();
+if(!localStorage.getItem("loggedUser")){
+window.location="index.html";
 }
 
+let chatArea=document.getElementById("chatArea");
+let historyDiv=document.getElementById("history");
 
-// Send message
-async function sendMessage() {
+function sendMessage(){
+let text=userInput.value.trim();
+if(!text) return;
 
-    const input = document.getElementById("message");
+addUserMessage(text);
+addHistory(text);
 
-    const message = input.value;
+let answer=generateAnswer(text);
+aiTyping(answer);
 
-    if (!message) return;
-
-
-    // Show user message
-    addMessage("You", message);
-
-    input.value = "";
-
-
-    const response = await fetch(API + "/chat", {
-
-        method: "POST",
-
-        headers: {
-            "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify({
-            chat_id: currentChatId,
-            message: message
-        })
-
-    });
-
-
-    const data = await response.json();
-
-    console.log(data); // debug
-
-
-    addMessage("Bot", data.answer);
-
-
-    loadHistory();
+userInput.value="";
 }
 
+function generateAnswer(text){
 
-// Add message to UI
-function addMessage(sender, text) {
+if(text.includes("கட்டுரை")){
+return `📌 அறிமுகம்
 
-    const chatbox = document.getElementById("chatbox");
+${text} பற்றிய விரிவான விளக்கம்.
 
-    const div = document.createElement("div");
+🔹 முக்கிய பகுதி 1
+இதன் முக்கிய அம்சங்கள் விளக்கம்.
 
-    div.innerHTML = "<b>" + sender + ":</b> " + text;
+🔹 முக்கிய பகுதி 2
+மேலும் விரிவான தகவல்கள்.
 
-    chatbox.appendChild(div);
-
+✅ முடிவு
+இதனால் ${text} பற்றிய கட்டுரை நிறைவடைகிறது.`;
 }
 
+return `${text} பற்றிய சுருக்கமான விளக்கம்:
 
-// Load chat history list
-async function loadHistory() {
-
-    const res = await fetch(API + "/history");
-
-    const data = await res.json();
-
-    const chatList = document.getElementById("chatList");
-
-    chatList.innerHTML = "";
-
-
-    data.forEach(chat => {
-
-        const div = document.createElement("div");
-
-        div.className = "chatItem";
-
-        div.innerText = chat.title;
-
-        div.onclick = () => loadChat(chat.chat_id);
-
-        chatList.appendChild(div);
-
-    });
-
+• முக்கிய அம்சம் 1  
+• முக்கிய அம்சம் 2  
+• முக்கிய அம்சம் 3`;
 }
 
+function aiTyping(answer){
 
-// Load specific chat
-async function loadChat(chat_id) {
+let div=document.createElement("div");
+div.className="message";
 
-    currentChatId = chat_id;
+let copy=document.createElement("span");
+copy.innerText="📋";
+copy.className="copy-btn";
+copy.onclick=()=>navigator.clipboard.writeText(answer);
 
-    const res = await fetch(API + "/chat/" + chat_id);
+div.appendChild(copy);
+chatArea.appendChild(div);
 
-    const messages = await res.json();
+let i=0;
+let interval=setInterval(()=>{
+div.innerHTML+=answer.charAt(i);
+i++;
+if(i>=answer.length) clearInterval(interval);
+},15);
 
-    const chatbox = document.getElementById("chatbox");
+chatArea.scrollTop=chatArea.scrollHeight;
+}
 
-    chatbox.innerHTML = "";
+function addUserMessage(text){
+chatArea.innerHTML+=`<div class="message">👤 ${text}</div>`;
+}
 
+function addHistory(topic){
+let id="his_"+Date.now();
 
-    messages.forEach(msg => {
+let div=document.createElement("div");
+div.className="history-item";
+div.id=id;
 
-        addMessage("You", msg.user_message);
+div.innerHTML=`
+<span>${topic}</span>
+<button onclick="deleteHistory('${id}')">X</button>
+`;
 
-        addMessage("Bot", msg.bot_response);
+historyDiv.appendChild(div);
+}
 
-    });
+function deleteHistory(id){
+document.getElementById(id).remove();
+}
 
+function handleFile(event){
+let file=event.target.files[0];
+if(!file) return;
+
+if(file.type.startsWith("image/")){
+let imgURL=URL.createObjectURL(file);
+chatArea.innerHTML+=`<div class="message"><img src="${imgURL}" width="200"></div>`;
+
+aiTyping("இந்த படத்தில் காணப்படும் பொருளின் விளக்கம்:\n\n• பொருள் அடையாளம்\n• பயன்பாடு\n• முக்கிய அம்சம்");
+}
+
+else if(file.type==="application/pdf"){
+chatArea.innerHTML+=`<div class="message">📄 PDF Uploaded: ${file.name}</div>`;
+
+aiTyping("இந்த PDF பற்றிய சுருக்கமான விளக்கம்:\n\n• முக்கிய தலைப்பு\n• உள்ளடக்கம்\n• பயன்பாடு");
+}
+}
+
+function startVoice(){
+let recognition=new webkitSpeechRecognition();
+recognition.lang="ta-IN";
+recognition.start();
+
+recognition.onresult=function(e){
+userInput.value=e.results[0][0].transcript;
+}
+}
+
+function logout(){
+localStorage.removeItem("loggedUser");
+window.location="index.html";
 }
